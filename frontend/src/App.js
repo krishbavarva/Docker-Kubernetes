@@ -17,18 +17,35 @@ function App() {
   useEffect(
     function loadUserInfo() {
       async function getCurrentUser() {
-        if (token) {
-          try {
-            let { email } = jwt.decode(token);
-            HomesApi.token = token;
-            let currentUser = await HomesApi.getCurrentUser(email);
-            setCurrentUser(currentUser);
-          } catch (err) {
-            console.log("error: ", err);
-            setCurrentUser(null);
+        try {
+          if (token) {
+            try {
+              let { email } = jwt.decode(token);
+              HomesApi.token = token;
+              // Add timeout to prevent hanging
+              const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error("Request timeout")), 5000)
+              );
+              let currentUser = await Promise.race([
+                HomesApi.getCurrentUser(email),
+                timeoutPromise,
+              ]);
+              setCurrentUser(currentUser);
+            } catch (err) {
+              console.log("error loading user: ", err);
+              setCurrentUser(null);
+              // Clear invalid token
+              if (err.message === "Request timeout" || err.message?.includes("jwt")) {
+                setToken(null);
+              }
+            }
           }
+        } catch (err) {
+          console.log("error in getCurrentUser: ", err);
+          setCurrentUser(null);
+        } finally {
+          setInfoLoaded(true);
         }
-        setInfoLoaded(true);
       }
       setInfoLoaded(false);
       getCurrentUser();
